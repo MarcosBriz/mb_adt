@@ -20,13 +20,13 @@ struct Node {
 template<class T>
 class List {
  public:
-  List() { count_ = 0; head_ = nullptr; tail_ = nullptr; }
-  List(const List &other) { count_ = other.count_; head_ = other.head_; tail_ = other.tail_; }
-  ~List() { clear(); }
+  List() { count_ = 0; head_ = nullptr; tail_ = nullptr; mem_allocs_ = 0; }
+  List(const List &other) { count_ = other.count_; head_ = other.head_; tail_ = other.tail_; mem_allocs_ = other.mem_allocs_; }
+  ~List() { clear(); assert(mem_allocs_ == 0); }
   
   void add(T &item)
   {
-    Node<T> *new_entry = new Node<T>();
+    Node<T> *new_entry = new Node<T>(); ++mem_allocs_;
     
     new_entry->data = &item;
     
@@ -61,12 +61,9 @@ class List {
     
     Node<T> *iterator = head_;
     
-    for(uint32_t i = 0; i < position; ++i)
-    {
-      iterator = iterator->next;
-    }
+    for(uint32_t i = 0; i < position; ++i) { iterator = iterator->next; }
     
-    Node<T> *new_entry = new Node<T>();
+    Node<T> *new_entry = new Node<T>(); ++mem_allocs_;
     
     new_entry->data = &item;
     new_entry->prev = iterator->prev;
@@ -75,6 +72,8 @@ class List {
     
     if(iterator->prev != nullptr)
       iterator->prev->next = new_entry;
+    else
+      head_ = new_entry;
     
     ++count_;
   }
@@ -88,35 +87,19 @@ class List {
     if(iterator == nullptr)
       return;
     
-    if(iterator->next != nullptr)
-    {
-      iterator->next->prev = iterator->prev;
-      
-      if(iterator->prev == nullptr)
-        head_ = iterator->next;
-    }
+    removeNode(iterator);
+  }
+  
+  void removeAt(uint32_t index)
+  {
+    if(index >= count_)
+      return;
     
-    if(iterator->prev != nullptr)
-    {
-      iterator->prev->next = iterator->next;
-      
-      if(iterator->next == nullptr)
-        tail_ = iterator->prev;
-    }
-      
-    iterator->data = nullptr;
-    iterator->prev = nullptr;
-    iterator->next = nullptr;
+    Node<T> *iterator = head_;
     
-    delete iterator;
+    for(uint32_t i = 0; i < index; ++i) { iterator = iterator->next; }
     
-    --count_;
-    
-    if(count_ == 0)
-    {
-      head_ = nullptr;
-      tail_ = nullptr;
-    }
+    removeNode(iterator);
   }
   
   void clear()
@@ -132,18 +115,38 @@ class List {
       to_remove->prev = nullptr;
       to_remove->next = nullptr;
       
-      delete to_remove;
+      delete to_remove; --mem_allocs_;
     }
     
     head_->data = nullptr;
     head_->prev = nullptr;
     head_->next = nullptr;
     
-    delete head_;
+    delete head_; --mem_allocs_;
     
     count_ = 0;
     head_ = nullptr;
     tail_ = nullptr;
+  }
+  
+  void traverse(void(*func)(T&))
+  {
+    for(Node<T> *iterator = head_; iterator != nullptr; iterator = iterator->next)
+    {
+      func(*(iterator->data));
+    }
+  }
+  
+  bool contains(const T &item)
+  {
+    bool found = false;
+    
+    for(Node<T> *iterator = head_; iterator != nullptr && !found; iterator = iterator->next)
+    {
+      found = iterator->data == &item;
+    }
+    
+    return found;
   }
   
   uint32_t count() { return count_; }
@@ -180,7 +183,8 @@ class List {
     count_ = other.count_; 
     head_ = other.head_; 
     tail_ = other.tail_;
-
+    mem_allocs_ = other.mem_allocs_;
+    
     return *this;
   };
   
@@ -200,6 +204,41 @@ class List {
   uint32_t count_;
   Node<T> *head_;
   Node<T> *tail_;
+  
+  uint32_t mem_allocs_;
+ 
+  void removeNode(Node<T> *node)
+  {
+    if(node->next != nullptr)
+    {
+      node->next->prev = node->prev;
+      
+      if(node->prev == nullptr)
+        head_ = node->next;
+    }
+    
+    if(node->prev != nullptr)
+    {
+      node->prev->next = node->next;
+      
+      if(node->next == nullptr)
+        tail_ = node->prev;
+    }
+    
+    node->data = nullptr;
+    node->prev = nullptr;
+    node->next = nullptr;
+    
+    delete node; --mem_allocs_;
+    
+    --count_;
+    
+    if(count_ == 0)
+    {
+      head_ = nullptr;
+      tail_ = nullptr;
+    }
+  }
  
 };
 
