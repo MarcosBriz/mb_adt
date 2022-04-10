@@ -15,19 +15,18 @@ template<typename T>
 struct Node {
   T data;
   Node<T> *next;
-  Node<T> *prev;
 };
 
 template<class T>
 class List {
  public:
-  List() { count_ = 0; head_ = nullptr; tail_ = nullptr; mem_allocs_ = 0; }
-  List(const List &other) { count_ = other.count_; head_ = other.head_; tail_ = other.tail_; mem_allocs_ = other.mem_allocs_; }
-  ~List() { clear(); assert(mem_allocs_ == 0); }
+  List() { count_ = 0; head_ = nullptr; tail_ = nullptr; }
+  List(const List &other) { count_ = other.count_; head_ = other.head_; tail_ = other.tail_; }
+  ~List() { clear(); }
   
   void add(const T &item)
   {
-    Node<T> *new_entry = new Node<T>(); ++mem_allocs_;
+    Node<T> *new_entry = new Node<T>();
     
     new_entry->data = item;
     
@@ -36,7 +35,7 @@ class List {
   
   void add(T &&item)
   {
-    Node<T> *new_entry = new Node<T>(); ++mem_allocs_;
+    Node<T> *new_entry = new Node<T>();
     
     new_entry->data = std::move(item);
     
@@ -51,11 +50,11 @@ class List {
       return;
     }
     
-    Node<T> *new_entry = new Node<T>(); ++mem_allocs_;
+    Node<T> *new_entry = new Node<T>();
     
     new_entry->data = item;
     
-    insertInternal(new_entry);
+    insertInternal(new_entry, position);
   }  
   
   void insert(T &&item, uint32_t position)
@@ -66,23 +65,32 @@ class List {
       return;
     }
     
-    Node<T> *new_entry = new Node<T>(); ++mem_allocs_;
+    Node<T> *new_entry = new Node<T>();
     
     new_entry->data = std::move(item);
     
-    insertInternal(new_entry);
+    insertInternal(new_entry, position);
   }
   
   void remove(const T &item)
   {
-    Node<T> *iterator;
-    
-    for(iterator = head_; iterator != nullptr && iterator->data != item; iterator = iterator->next);
-    
-    if(iterator == nullptr)
+    if(count_ == 0)
       return;
     
-    removeNode(iterator);
+    if(head_->data == item)
+    {
+      removeHead();
+      return;
+    }
+    
+    Node<T> *iterator;
+    
+    for(iterator = head_; iterator->next != nullptr && iterator->next->data != item; iterator = iterator->next);
+    
+    if(iterator->next == nullptr)
+      return;
+    
+    removeNextNode(iterator);
   }
   
   void removeAt(uint32_t index)
@@ -90,11 +98,17 @@ class List {
     if(index >= count_)
       return;
     
+    if(index == 0)
+    {
+      removeHead();
+      return;
+    }
+    
     Node<T> *iterator = head_;
     
-    for(uint32_t i = 0; i < index; ++i) { iterator = iterator->next; }
+    for(uint32_t i = 0; i < index-1; ++i) { iterator = iterator->next; }
     
-    removeNode(iterator);
+    removeNextNode(iterator);
   }
   
   void clear()
@@ -102,20 +116,19 @@ class List {
     if(count_ == 0)
       return;
     
-    for(Node<T> *iterator = tail_->prev; iterator != nullptr; iterator = iterator->prev)
+    Node<T> *to_remove = head_;
+    
+    for(Node<T> *iterator = head_->next; iterator != nullptr; iterator = iterator->next)
     {
-      Node<T> *to_remove = iterator->next;
       
-      to_remove->prev = nullptr;
       to_remove->next = nullptr;
+      delete to_remove;
       
-      delete to_remove; --mem_allocs_;
+      to_remove = iterator;
     }
     
-    head_->prev = nullptr;
-    head_->next = nullptr;
-    
-    delete head_; --mem_allocs_;
+    to_remove->next = nullptr;
+    delete to_remove;
     
     count_ = 0;
     head_ = nullptr;
@@ -182,7 +195,6 @@ class List {
     count_ = other.count_; 
     head_ = other.head_; 
     tail_ = other.tail_;
-    mem_allocs_ = other.mem_allocs_;
     
     return *this;
   };
@@ -194,7 +206,7 @@ class List {
     
     for(Node<T> *iterator = head_; iterator != nullptr; iterator = iterator->next)
     {
-      printf("\nNode %p, prev %p, next %p, data %p", iterator, iterator->prev, iterator->next, &(iterator->data));
+      printf("\nNode %p, next %p, data %p", iterator, iterator->next, &(iterator->data));
     }
     
   }
@@ -203,31 +215,16 @@ class List {
   uint32_t count_;
   Node<T> *head_;
   Node<T> *tail_;
-  
-  uint32_t mem_allocs_;
  
-  void removeNode(Node<T> *node)
+  void removeNextNode(Node<T> *node)
   {
-    if(node->next != nullptr)
-    {
-      node->next->prev = node->prev;
-      
-      if(node->prev == nullptr)
-        head_ = node->next;
-    }
+    Node<T> *to_remove = node->next;
     
-    if(node->prev != nullptr)
-    {
-      node->prev->next = node->next;
-      
-      if(node->next == nullptr)
-        tail_ = node->prev;
-    }
-   
-    node->prev = nullptr;
-    node->next = nullptr;
+    node->next = to_remove->next;
     
-    delete node; --mem_allocs_;
+    to_remove->next = nullptr;
+    
+    delete to_remove;
     
     --count_;
     
@@ -236,9 +233,27 @@ class List {
       head_ = nullptr;
       tail_ = nullptr;
     }
+    else if(node->next == nullptr)
+    {
+      tail_ = node;
+    }
   }
   
-  void addInternal(Node<T> *new_entry){
+  void removeHead()
+  {
+    Node<T> *next = head_->next;
+    head_->next = nullptr;
+    delete head_;
+      
+    head_ = next;
+    --count_;
+      
+    if(count_ == 0)
+      tail_ = nullptr;
+  }
+  
+  void addInternal(Node<T> *new_entry)
+  {
     
     if(count_ == 0)
     {
@@ -246,11 +261,9 @@ class List {
       tail_ = head_;
       
       new_entry->next = nullptr;
-      new_entry->prev = nullptr;
     }
     else
     {
-      new_entry->prev = tail_;
       new_entry->next = nullptr;
       
       tail_->next = new_entry;
@@ -261,20 +274,24 @@ class List {
     ++count_;
   }
   
-  void insertInternal(Node<T> *new_entry){
+  void insertInternal(Node<T> *new_entry, int32_t position)
+  {
     
-    Node<T> *iterator = head_;
-    
-    for(uint32_t i = 0; i < position; ++i) { iterator = iterator->next; }
-    
-    new_entry->prev = iterator->prev;
-    new_entry->next = iterator;
-    iterator->prev = new_entry;
-    
-    if(iterator->prev != nullptr)
-      iterator->prev->next = new_entry;
-    else
+    if(position == 0)
+    {
+      new_entry->next = head_;
       head_ = new_entry;
+    }
+    else
+    {
+      Node<T> *iterator = head_;
+      
+      for(uint32_t i = 0; i < position - 1; ++i) { iterator = iterator->next; }
+      
+      Node<T> *next = iterator->next;
+      iterator->next = new_entry;
+      new_entry->next = next;
+    }
     
     ++count_;
   }
