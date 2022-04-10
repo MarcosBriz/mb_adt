@@ -6,13 +6,14 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <assert.h>
+#include <utility>
 
 namespace mb
 {
 
 template<typename T>
 struct Node {
-  T *data;
+  T data;
   Node<T> *next;
   Node<T> *prev;
 };
@@ -24,34 +25,25 @@ class List {
   List(const List &other) { count_ = other.count_; head_ = other.head_; tail_ = other.tail_; mem_allocs_ = other.mem_allocs_; }
   ~List() { clear(); assert(mem_allocs_ == 0); }
   
-  void add(T &item)
+  void add(const T &item)
   {
     Node<T> *new_entry = new Node<T>(); ++mem_allocs_;
     
-    new_entry->data = &item;
+    new_entry->data = item;
     
-    if(count_ == 0)
-    {
-      head_ = new_entry;
-      tail_ = head_;
-      
-      new_entry->next = nullptr;
-      new_entry->prev = nullptr;
-    }
-    else
-    {
-      new_entry->prev = tail_;
-      new_entry->next = nullptr;
-      
-      tail_->next = new_entry;
-      
-      tail_ = new_entry;
-    }
+    addInternal(new_entry);
+  }  
+  
+  void add(T &&item)
+  {
+    Node<T> *new_entry = new Node<T>(); ++mem_allocs_;
     
-    ++count_;
+    new_entry->data = std::move(item);
+    
+    addInternal(new_entry);
   }
   
-  void insert(T &item, uint32_t position)
+  void insert(const T &item, uint32_t position)
   {
     if(position >= count_) //Adds item at last position.
     {
@@ -59,30 +51,33 @@ class List {
       return;
     }
     
-    Node<T> *iterator = head_;
+    Node<T> *new_entry = new Node<T>(); ++mem_allocs_;
     
-    for(uint32_t i = 0; i < position; ++i) { iterator = iterator->next; }
+    new_entry->data = item;
+    
+    insertInternal(new_entry);
+  }  
+  
+  void insert(T &&item, uint32_t position)
+  {
+    if(position >= count_) //Adds item at last position.
+    {
+      add(std::move(item));
+      return;
+    }
     
     Node<T> *new_entry = new Node<T>(); ++mem_allocs_;
     
-    new_entry->data = &item;
-    new_entry->prev = iterator->prev;
-    new_entry->next = iterator;
-    iterator->prev = new_entry;
+    new_entry->data = std::move(item);
     
-    if(iterator->prev != nullptr)
-      iterator->prev->next = new_entry;
-    else
-      head_ = new_entry;
-    
-    ++count_;
+    insertInternal(new_entry);
   }
   
   void remove(const T &item)
   {
     Node<T> *iterator;
     
-    for(iterator = head_; iterator != nullptr && iterator->data != &item; iterator = iterator->next);
+    for(iterator = head_; iterator != nullptr && iterator->data != item; iterator = iterator->next);
     
     if(iterator == nullptr)
       return;
@@ -111,14 +106,12 @@ class List {
     {
       Node<T> *to_remove = iterator->next;
       
-      to_remove->data = nullptr;
       to_remove->prev = nullptr;
       to_remove->next = nullptr;
       
       delete to_remove; --mem_allocs_;
     }
     
-    head_->data = nullptr;
     head_->prev = nullptr;
     head_->next = nullptr;
     
@@ -133,7 +126,7 @@ class List {
   {
     for(Node<T> *iterator = head_; iterator != nullptr; iterator = iterator->next)
     {
-      func(*(iterator->data));
+      func(iterator->data);
     }
   }
   
@@ -143,7 +136,7 @@ class List {
     
     for(Node<T> *iterator = head_; iterator != nullptr && !found; iterator = iterator->next)
     {
-      found = iterator->data == &item;
+      found = iterator->data == item;
     }
     
     return found;
@@ -163,12 +156,18 @@ class List {
     
     assert(indexed != nullptr);
     
-    return *(indexed->data);
+    return indexed->data;
   }  
   
-  const List<T>& operator+=(T &item)
+  const List<T>& operator+=(const T &item)
   {
     add(item);
+    return *this;
+  }    
+  
+  const List<T>& operator+=(T &&item)
+  {
+    add(std::move(item));
     return *this;
   }  
   
@@ -195,7 +194,7 @@ class List {
     
     for(Node<T> *iterator = head_; iterator != nullptr; iterator = iterator->next)
     {
-      printf("\nNode %p, prev %p, next %p, data %p", iterator, iterator->prev, iterator->next, iterator->data);
+      printf("\nNode %p, prev %p, next %p, data %p", iterator, iterator->prev, iterator->next, &(iterator->data));
     }
     
   }
@@ -224,8 +223,7 @@ class List {
       if(node->next == nullptr)
         tail_ = node->prev;
     }
-    
-    node->data = nullptr;
+   
     node->prev = nullptr;
     node->next = nullptr;
     
@@ -238,6 +236,47 @@ class List {
       head_ = nullptr;
       tail_ = nullptr;
     }
+  }
+  
+  void addInternal(Node<T> *new_entry){
+    
+    if(count_ == 0)
+    {
+      head_ = new_entry;
+      tail_ = head_;
+      
+      new_entry->next = nullptr;
+      new_entry->prev = nullptr;
+    }
+    else
+    {
+      new_entry->prev = tail_;
+      new_entry->next = nullptr;
+      
+      tail_->next = new_entry;
+      
+      tail_ = new_entry;
+    }
+    
+    ++count_;
+  }
+  
+  void insertInternal(Node<T> *new_entry){
+    
+    Node<T> *iterator = head_;
+    
+    for(uint32_t i = 0; i < position; ++i) { iterator = iterator->next; }
+    
+    new_entry->prev = iterator->prev;
+    new_entry->next = iterator;
+    iterator->prev = new_entry;
+    
+    if(iterator->prev != nullptr)
+      iterator->prev->next = new_entry;
+    else
+      head_ = new_entry;
+    
+    ++count_;
   }
  
 };
