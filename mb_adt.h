@@ -7,26 +7,24 @@
 #include <stdint.h>
 #include <assert.h>
 #include <utility>
+#include <mutex>
+#include <atomic>
 
 namespace mb
 {
-
-template<typename T>
-struct Node {
-  T data;
-  Node<T> *next;
-};
-
+  
 template<class T>
 class List {
+  
  public:
   List() { count_ = 0; head_ = nullptr; tail_ = nullptr; }
+  //TODO: copy constructors
   List(const List &other) { count_ = other.count_; head_ = other.head_; tail_ = other.tail_; }
   ~List() { clear(); }
   
   void add(const T &item)
   {
-    Node<T> *new_entry = new Node<T>();
+    Node *new_entry = new Node();
     
     new_entry->data = item;
     
@@ -35,7 +33,7 @@ class List {
   
   void add(T &&item)
   {
-    Node<T> *new_entry = new Node<T>();
+    Node *new_entry = new Node();
     
     new_entry->data = std::move(item);
     
@@ -50,7 +48,7 @@ class List {
       return;
     }
     
-    Node<T> *new_entry = new Node<T>();
+    Node *new_entry = new Node();
     
     new_entry->data = item;
     
@@ -65,7 +63,7 @@ class List {
       return;
     }
     
-    Node<T> *new_entry = new Node<T>();
+    Node *new_entry = new Node();
     
     new_entry->data = std::move(item);
     
@@ -83,7 +81,7 @@ class List {
       return;
     }
     
-    Node<T> *iterator;
+    Node *iterator;
     
     for(iterator = head_; iterator->next != nullptr && iterator->next->data != item; iterator = iterator->next);
     
@@ -104,7 +102,7 @@ class List {
       return;
     }
     
-    Node<T> *iterator = head_;
+    Node *iterator = head_;
     
     for(uint32_t i = 0; i < index-1; ++i) { iterator = iterator->next; }
     
@@ -116,9 +114,9 @@ class List {
     if(count_ == 0)
       return;
     
-    Node<T> *to_remove = head_;
+    Node *to_remove = head_;
     
-    for(Node<T> *iterator = head_->next; iterator != nullptr; iterator = iterator->next)
+    for(Node *iterator = head_->next; iterator != nullptr; iterator = iterator->next)
     {
       
       to_remove->next = nullptr;
@@ -137,7 +135,7 @@ class List {
   
   void traverse(void(*func)(T&))
   {
-    for(Node<T> *iterator = head_; iterator != nullptr; iterator = iterator->next)
+    for(Node *iterator = head_; iterator != nullptr; iterator = iterator->next)
     {
       func(iterator->data);
     }
@@ -147,7 +145,7 @@ class List {
   {
     bool found = false;
     
-    for(Node<T> *iterator = head_; iterator != nullptr && !found; iterator = iterator->next)
+    for(Node *iterator = head_; iterator != nullptr && !found; iterator = iterator->next)
     {
       found = iterator->data == item;
     }
@@ -160,7 +158,7 @@ class List {
   T& operator[](uint32_t index)
   {
     
-    Node<T> *indexed = head_;
+    Node *indexed = head_;
     
     for(uint32_t i = 0; i < index && indexed != nullptr; ++i)
     {
@@ -204,7 +202,7 @@ class List {
     printf("\n\nList Debug Print %p\n", this);
     printf("\nItem count: %d\nHead: %p, Tail: %p\n", count_, head_, tail_);
     
-    for(Node<T> *iterator = head_; iterator != nullptr; iterator = iterator->next)
+    for(Node *iterator = head_; iterator != nullptr; iterator = iterator->next)
     {
       printf("\nNode %p, next %p, data %p", iterator, iterator->next, &(iterator->data));
     }
@@ -212,13 +210,19 @@ class List {
   }
   
  private:
-  uint32_t count_;
-  Node<T> *head_;
-  Node<T> *tail_;
  
-  void removeNextNode(Node<T> *node)
+  struct Node {
+    T data;
+    Node *next;
+  };
+ 
+  uint32_t count_;
+  Node *head_;
+  Node *tail_;
+ 
+  void removeNextNode(Node *node)
   {
-    Node<T> *to_remove = node->next;
+    Node *to_remove = node->next;
     
     node->next = to_remove->next;
     
@@ -241,7 +245,7 @@ class List {
   
   void removeHead()
   {
-    Node<T> *next = head_->next;
+    Node *next = head_->next;
     head_->next = nullptr;
     delete head_;
       
@@ -252,7 +256,7 @@ class List {
       tail_ = nullptr;
   }
   
-  void addInternal(Node<T> *new_entry)
+  void addInternal(Node *new_entry)
   {
     
     if(count_ == 0)
@@ -274,7 +278,7 @@ class List {
     ++count_;
   }
   
-  void insertInternal(Node<T> *new_entry, int32_t position)
+  void insertInternal(Node *new_entry, int32_t position)
   {
     
     if(position == 0)
@@ -284,11 +288,11 @@ class List {
     }
     else
     {
-      Node<T> *iterator = head_;
+      Node *iterator = head_;
       
       for(uint32_t i = 0; i < position - 1; ++i) { iterator = iterator->next; }
       
-      Node<T> *next = iterator->next;
+      Node *next = iterator->next;
       iterator->next = new_entry;
       new_entry->next = next;
     }
@@ -298,6 +302,108 @@ class List {
  
 };
 
+template<class T>
+class LockeableList : public List<T>, public ThreadLocks { };
+
+template<class T>
+class Array {
+
+ public:
+  
+  Array()
+  {
+    data_ = nullptr;
+    lenght_ = 0;
+  }
+ 
+  Array(int32_t size) 
+  {
+    data_ = new T[size];
+    lenght_ = size;
+  }
+  
+  ~Array() 
+  { 
+    if(data_ != nullptr) { delete[] data_; }
+    lenght_ = 0;
+  }
+  //TODO: these constructors + move
+  Array(const Array& other) = delete;
+  const Array<T>& operator=(const Array<T>& other) = delete;
+  
+  void resize(int32_t size)
+  {
+    T* new_buffer = new T[size];
+    
+    int32_t cpy_lenght = size < lenght_ ? size : lenght_;
+
+    std::memcpy(new_buffer, data_, sizeof(T) * cpy_lenght);
+    std::memset(data_, 0, sizeof(T) * cpy_lenght);
+    
+    delete[] data_;
+    data_ = new_buffer;
+    lenght_ = size;
+  }
+  
+  void memset(int8_t value) { std::memset(data_, value, sizeof(T) * lenght_); }
+  
+  void traverse(void(*func)(T&))
+  {
+    for(int32_t i = 0; i < lenght_; ++i)
+    {
+      func(data_[i]);
+    }
+  }
+  
+  int32_t lenght(){ return lenght_; }
+  
+  T& operator[](int32_t index)
+  {     
+    return data_[index];
+  }
+
+ private:
+  int32_t lenght_;
+  T *data_; 
+};
+
+template<class T>
+class LockeableArray : public Array<T>, public ThreadLocks { };
+
+class ThreadLocks {
+ public:
+ 
+  ThreadLocks() { spinLock_ = 0; }
+  ThreadLocks(const ThreadLocks &other) { }
+  ThreadLocks(ThreadLocks &&other) { }
+  
+  ThreadLocks& operator=(ThreadLocks&& other) {
+    return *this;
+  }  
+  
+  ThreadLocks& operator=(const ThreadLocks& other) {
+    return *this;
+  }
+
+  ~ThreadLocks() {}
+ 
+  void lock() { lock_.lock(); }
+  void unlock() { lock_.unlock(); }
+  
+  void spinLock() {
+    int i;
+    while (true) {
+      i = 0;
+      if (spinLock_.compare_exchange_weak(i, 1)) break;
+    }
+  };
+
+  void spinUnlock() { spinLock_.store(0); }
+  
+ private:
+  std::mutex lock_;
+  std::atomic<int> spinLock_;
+};
 
 };
 
