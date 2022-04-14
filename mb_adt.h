@@ -337,7 +337,79 @@ class List {
     other.tail_ = nullptr;
     other.count_ = 0;
   }
+  
+ public:
  
+  class Iterator {
+   public:
+    
+    Iterator(){ node = nullptr; }
+    Iterator(const Iterator &other){ node = other.node; }
+    Iterator(Iterator &other){ node = other.node; }
+    Iterator(Iterator &&other){ node = other.node; other.node = nullptr; }
+    
+    T& operator*()
+    {
+      return node->data;
+    }    
+    
+    Iterator& operator=(const Iterator &other)
+    {
+      node = other.node;
+      return *this;
+    }        
+    
+    Iterator& operator=(Iterator &other)
+    {
+      node = other.node;
+      return *this;
+    }    
+    
+    Iterator& operator=(Iterator &&other)
+    {
+      node = other.node;
+      other.node = nullptr;
+      return *this;
+    }    
+    
+    bool operator==(const Iterator &other)
+    {
+      return node == other.node;
+    }    
+    
+    bool operator!=(const Iterator &other)
+    {
+      return node != other.node;
+    }    
+    
+    bool operator==(const void *p)
+    {
+      return node == p;
+    }    
+    
+    bool operator!=(const void *p)
+    {
+      return node != p;
+    }
+    
+    Iterator& operator++()
+    {
+      node = node->next;
+      return *this;
+    }
+   
+   private:
+
+    Node *node;
+    
+    Iterator(Node *node) { this->node = node; }
+    
+    friend List;
+  };
+  
+  Iterator begin() { return Iterator(head_); }
+  
+  Iterator end() { return Iterator(tail_); }
 };
 
 template<class T>
